@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>批量发送短信</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .student-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .student-table th, .student-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .student-table th {
+            background-color: #f5f5f5;
+        }
+        .student-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .student-table tr:hover {
+            background-color: #f0f0f0;
+        }
+        .select-all-container {
+            margin: 10px 0;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .change-password-link {
+            color: #4CAF50;
+            text-decoration: none;
+            padding: 8px 16px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+        .change-password-link:hover {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .logout-link {
+            color: #f44336;
+            text-decoration: none;
+            padding: 8px 16px;
+            border: 1px solid #f44336;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+        .logout-link:hover {
+            background-color: #f44336;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="user-info">
+                <h2>欢迎, <span id="username"></span></h2>
+                <a href="/change_password" class="change-password-link">修改密码</a>
+            </div>
+            <a href="/logout" class="logout-link">退出登录</a>
+        </div>
+        <h1>批量发送短信</h1>
+        
+        <!-- 年级选择 -->
+        <div class="section">
+            <h2>年级选择</h2>
+            <div class="checkbox-group">
+                <label>
+                    <input type="checkbox" name="grade" value="高一"> 高一
+                </label>
+                <label>
+                    <input type="checkbox" name="grade" value="高二"> 高二
+                </label>
+                <label>
+                    <input type="checkbox" name="grade" value="高考"> 高考
+                </label>
+            </div>
+        </div>
+        
+        <!-- 时间选择 -->
+        <div class="section">
+            <h2>时间选择</h2>
+            <div class="checkbox-group">
+                <label>
+                    <input type="checkbox" name="time" value='["2025-07-07","2025-07-12"]'> 一期
+                </label>
+                <label>
+                    <input type="checkbox" name="time" value="2025-07-21"> 二期
+                </label>
+                <label>
+                    <input type="checkbox" name="time" value="2025-08-04"> 三期
+                </label>
+            </div>
+        </div>
+        
+        <!-- 获取学生列表按钮 -->
+        <button id="getStudentsBtn" class="btn">获取学生列表</button>
+        
+        <!-- 学生列表 -->
+        <div class="section">
+            <h2>未添加好友的学生列表</h2>
+            <div class="select-all-container">
+                <label>
+                    <input type="checkbox" id="selectAll"> 全选
+                </label>
+            </div>
+            <div id="studentList" class="student-list">
+                <!-- 学生列表将在这里动态显示 -->
+            </div>
+        </div>
+        
+        <!-- 消息输入 -->
+        <div class="section">
+            <h2>发送消息</h2>
+            <textarea id="message" placeholder="请输入要发送的消息内容..."></textarea>
+            <button id="sendBtn" class="btn">发送消息</button>
+        </div>
+    </div>
+
+    <script>
+        // 获取当前登录用户名
+        fetch('/get_username')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('username').textContent = data.username;
+                }
+            })
+            .catch(error => console.error('Error:', error));
+
+        // 获取学生列表
+        document.getElementById('getStudentsBtn').addEventListener('click', async () => {
+            const selectedGrades = Array.from(document.querySelectorAll('input[name="grade"]:checked')).map(cb => cb.value);
+            const selectedTimes = Array.from(document.querySelectorAll('input[name="time"]:checked')).map(cb => cb.value);
+            
+            if (selectedGrades.length === 0 || selectedTimes.length === 0) {
+                alert('请选择年级和时间');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/get_students', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        grade: selectedGrades,
+                        time: selectedTimes
+                    })
+                });
+                
+                const data = await response.json();
+                console.log('服务器响应:', data);
+                
+                if (data.success) {
+                    const studentList = document.getElementById('studentList');
+                    studentList.innerHTML = '';
+                    
+                    if (data.students.length === 0) {
+                        studentList.innerHTML = '<p>没有找到未添加好友的学生</p>';
+                    } else {
+                        const table = document.createElement('table');
+                        table.className = 'student-table';
+                        
+                        // 创建表头
+                        const thead = document.createElement('thead');
+                        thead.innerHTML = `
+                            <tr>
+                                <th>选择</th>
+                                <th>学生姓名</th>
+                                <th>学号</th>
+                                <th>班级</th>
+                            </tr>
+                        `;
+                        table.appendChild(thead);
+                        
+                        // 创建表体
+                        const tbody = document.createElement('tbody');
+                        data.students.forEach(student => {
+                            const tr = document.createElement('tr');
+                            tr.innerHTML = `
+                                <td><input type="checkbox" class="student-checkbox" data-student-code="${student.code}" data-student-name="${student.name}"></td>
+                                <td>${student.name}</td>
+                                <td>${student.code}</td>
+                                <td>${student.className}</td>
+                            `;
+                            tbody.appendChild(tr);
+                        });
+                        table.appendChild(tbody);
+                        studentList.appendChild(table);
+                        
+                        // 显示学生总数
+                        const totalInfo = document.createElement('p');
+                        totalInfo.textContent = `共找到 ${data.students.length} 名未添加好友的学生`;
+                        totalInfo.style.textAlign = 'center';
+                        totalInfo.style.marginTop = '10px';
+                        totalInfo.style.color = '#666';
+                        studentList.appendChild(totalInfo);
+                    }
+                } else {
+                    alert(data.error || '获取学生列表失败');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('获取学生列表失败');
+            }
+        });
+        
+        // 全选功能
+        document.getElementById('selectAll').addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('.student-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+        });
+        
+        // 发送消息
+        document.getElementById('sendBtn').addEventListener('click', async () => {
+            const message = document.getElementById('message').value.trim();
+            if (!message) {
+                alert('请输入消息内容');
+                return;
+            }
+
+            // 获取选中的学生
+            const selectedStudents = [];
+            document.querySelectorAll('.student-checkbox:checked').forEach(checkbox => {
+                const studentData = {
+                    schoolId: 3,
+                    studentCode: checkbox.dataset.studentCode,
+                    studentName: checkbox.dataset.studentName,
+                    sendCount: 0,
+                    sendLimit: 1,
+                    friend: false,
+                    sendFlag: true,
+                    checked: true
+                };
+                selectedStudents.push(studentData);
+            });
+
+            if (selectedStudents.length === 0) {
+                alert('请选择至少一个学生');
+                return;
+            }
+
+            console.log('准备发送的数据：', {
+                message: message,
+                students: selectedStudents
+            });
+
+            try {
+                const response = await fetch('/send_message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        students: selectedStudents
+                    })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    alert('消息发送成功！');
+                } else {
+                    alert('发送失败：' + result.error);
+                }
+            } catch (error) {
+                console.error('发送失败：', error);
+                alert('发送失败：' + error.message);
+            }
+        });
+
+        // 页面加载时获取默认消息内容
+        window.addEventListener('load', async () => {
+            try {
+                const response = await fetch('/get_default_message');
+                const result = await response.json();
+                if (result.success) {
+                    document.getElementById('message').value = result.message;
+                }
+            } catch (error) {
+                console.error('获取默认消息失败：', error);
+            }
+        });
+    </script>
+</body>
+</html> 
