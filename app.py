@@ -4,6 +4,7 @@ import json
 import requests
 import openpyxl
 from functools import wraps
+import ast
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key'  # 用于session加密
@@ -695,9 +696,11 @@ def send_message():
         print("=" * 50)
         print("开始处理参数文件中的值：")
         for key, value in wxbackendmsg_params_dict.items():
-            print(f"处理参数: {key} = {value}")
             # 跳过studentList，因为它应该从selected_students获取
             if key == 'studentList':
+                continue
+            # 跳过content，保持前端传入的message
+            if key == 'content':
                 continue
             if key != 'Host' and key != 'accessToken' and key != 'teacher' and key != 'classReq':
                 if key in final_json_data:
@@ -706,9 +709,7 @@ def send_message():
             elif key == 'teacher':
                 if key in final_json_data:
                     try:
-                        # 解析teacher字符串为字典
-                        teacher_str = value.replace("'", '"')
-                        teacher_dict = json.loads(teacher_str)
+                        teacher_dict = ast.literal_eval(value)
                         final_json_data[key] = teacher_dict
                         print(f"设置 teacher = {teacher_dict}")
                     except Exception as e:
