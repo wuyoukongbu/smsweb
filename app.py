@@ -5,6 +5,25 @@ import requests
 import openpyxl
 from functools import wraps
 import ast
+import re
+
+# 秋季周末到日期的映射（可按需调整年份与日期）
+AUTUMN_WEEKDAY_TO_DATE = {
+    '周六': '2025-09-06',
+    '周日': '2025-09-07',
+}
+
+def normalize_date_string(date_str: str) -> str:
+    """将 20250906 规范为 2025-09-06；已是 YYYY-MM-DD 则原样返回，其它保持原样。"""
+    if not isinstance(date_str, str):
+        return date_str
+    # 纯数字 8 位：YYYYMMDD -> YYYY-MM-DD
+    if re.fullmatch(r"\d{8}", date_str):
+        return f"{date_str[0:4]}-{date_str[4:6]}-{date_str[6:8]}"
+    # 已是 YYYY-MM-DD
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_str):
+        return date_str
+    return date_str
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key'  # 用于session加密
@@ -132,6 +151,15 @@ def get_students():
                     selected_time.extend(parsed)
             except json.JSONDecodeError:
                 selected_time.append(item)
+
+        # 秋季适配：将“周六/周日”映射为具体日期，并统一日期格式
+        mapped_time = []
+        for t in selected_time:
+            # 先把周末关键字映射为具体日期
+            mapped = AUTUMN_WEEKDAY_TO_DATE.get(t, t)
+            # 再做日期格式规范化
+            mapped_time.append(normalize_date_string(mapped))
+        selected_time = mapped_time
 
         # 关键调试：检查接收到的参数
         print("=" * 50)
